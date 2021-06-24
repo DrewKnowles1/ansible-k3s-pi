@@ -1,0 +1,165 @@
+- name: Base config for master 
+  hosts: master
+
+  tasks:
+
+      - local_action: file path=../files/node_token state=absent
+
+      - name: Download k3s
+        get_url:
+          url: https://get.k3s.io 
+          dest: /home/ubuntu/installk3s.sh
+          mode: '0700'
+
+      - name: Copy new cmdline.txt file over
+        copy:
+          src: ../files/cmdline.txt
+          dest: /boot/firmware/cmdline.txt
+          follow: yes
+        become: yes
+
+      - name: Set Hostname
+        command: hostnamectl set-hostname pi-control-plane
+        become: yes
+
+        - name: Check OS architecture
+          command: "uname -m"
+          register: os_arch_version
+
+        - name: Print the gateway for each host when defined
+          ansible.builtin.debug:
+            msg: System {{ os_arch_version }}
+
+        - name: Download libseccomp2.deb
+          command: "wget http://ftp.us.debian.org/debian/pool/main/libs/libseccomp/libseccomp2_2.5.1-1_arm64.deb"
+          become: yes
+
+        - name: Install libseccomp2.deb
+          command: "dpkg -i libseccomp2_2.5.1-1_arm64.deb"
+          become: yes
+      - name: Update repositories cache and install "docker" package
+        apt:
+          name: docker.io
+          update_cache: yes
+        become: yes
+      
+      - name: Reboot a slow machine that might have lots of updates to apply
+        reboot:
+          reboot_timeout: 3600
+        become: yes
+
+- name: Base config for nodes 
+  hosts: nodes
+
+  tasks:
+      
+      - set_fact:
+          random_num: "{{ 100000 | random }}"
+
+      - name: Download k3s
+        get_url:
+          url: https://get.k3s.io 
+          dest: /home/ubuntu/installk3s.sh
+          mode: '0700'
+
+      - name: Copy new cmdline.txt file over
+        copy:
+          src: ../files/cmdline.txt
+          dest: /boot/firmware/cmdline.txt
+          follow: yes
+        become: yes
+
+      - name: Download libseccomp2.deb
+        command: "wget http://ftp.us.debian.org/debian/pool/main/libs/libseccomp/libseccomp2_2.5.1-1_arm64.deb"
+        become: yes
+
+      - name: Install libseccomp2.deb
+        command: "dpkg -i libseccomp2_2.5.1-1_arm64.deb"
+        become: yes
+
+      - name: Set Hostname
+        command: "hostnamectl set-hostname pi-node-{{ random_num|quote }}"
+        become: yes
+      
+      - name: Update repositories cache and install "docker" package
+        apt:
+          name: docker.io
+          update_cache: yes
+        become: yes
+      
+      - name: Reboot a slow machine that might have lots of updates to apply
+        reboot:
+          reboot_timeout: 3600
+        become: yes
+
+- name: Install k3s on master node
+  hosts: master
+
+  tasks:
+
+      - name: Install k3s
+        command: "/home/ubuntu/installk3s.sh --disable servicelb --no-deploy traefik"
+        
+
+      - name: Load data
+        slurp:
+          src: /var/lib/rancher/k3s/server/node-token
+        register: slurped_user_data
+        become: yes
+
+      - name: Decode data and store as fact
+        set_fact:
+          slurped_node_token: "{{ slurped_user_data.content | b64decode}}"
+
+      - local_action: copy content={{ slurped_node_token }} dest=../files/node_token
+
+- name: Install k3s on worker nodes
+  hosts: nodes
+
+  tasks:
+
+      - name: Read node token from file
+        set_fact:
+          node_token: "{{lookup('file', '../files/node_token') }}"
+
+      - name: Ansible Template Example
+        template:
+          src: k3s-agent.sh
+          dest: /home/ubuntu/k3s-agent.sh
+          mode: 0777
+
+      - name: Install k3s on nodes
+        command: "/home/ubuntu/k3s-agent.sh --disable servicelb --no-deploy traefik"
+        become: yes
+
+- name: Install k3s on jetson node(s)
+  hosts: jetson
+
+  tasks:
+
+      - name: Download k3s
+        get_url:
+          url: https://get.k3s.io 
+          dest: /home/jetson/installk3s.sh
+          mode: '0700'
+
+      - name: Read node token from file
+        set_fact:
+          node_token: "{{lookup('file', '../files/node_token') }}"
+
+      - name: Ansible Template Example
+        template:
+          src: k3s-agent.sh
+          dest: /home/jetson/k3s-agent.sh
+          mode: 0777
+
+      - name: Install k3s on nodes
+        command: "/home/jetson/k3s-agent.sh --disable servicelb --no-deploy traefik"
+        become: yes
+
+- name: Blank local node_token file
+  hosts: nodes
+
+  tasks:
+
+      - local_action: copy content="" dest=../files/node_token

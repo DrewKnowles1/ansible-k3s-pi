@@ -1,0 +1,13 @@
+[master]
+master ansible_host=192.168.3.21 ansible_user=ubuntu
+
+
+[nodes]
+node1 ansible_host=192.168.3.33 ansible_user=ubuntu
+node2 ansible_host=192.168.3.44 ansible_user=ubuntu
+node3 ansible_host=192.168.3.45 ansible_user=ubuntu
+node4 ansible_host=192.168.3.46 ansible_user=ubuntu
+node5 ansible_host=192.168.3.47 ansible_user=ubuntu
+node6 ansible_host=192.168.3.48 ansible_user=ubuntu
+node7 ansible_host=192.168.3.49 ansible_user=ubuntu
+node8 ansible_host=192.168.3.50 ansible_user=ubuntu
